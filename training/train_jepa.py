@@ -60,7 +60,7 @@ def train(config: dict, max_steps: int | None = None) -> Path:
     dataloader = DataLoader(train_dataset, batch_size=train_cfg["batch_size"], shuffle=True)
 
     model = JEPAEncoder(model_name=config["model"]["backbone"], pooling=config["model"]["pooling"]).to(device)
-    loss_fn = SpanPredictionLoss()
+    loss_fn = SpanPredictionLoss(variance_weight=jepa_cfg["variance_weight"], variance_target=jepa_cfg["variance_target"])
 
     optimizer = build_optimizer(model, train_cfg["learning_rate"], train_cfg["weight_decay"])
     total_steps = len(dataloader) * train_cfg["num_epochs"]
@@ -92,6 +92,7 @@ def train(config: dict, max_steps: int | None = None) -> Path:
             loss.backward()
             optimizer.step()
             scheduler.step()
+            model.update_target_backbone(jepa_cfg["ema_momentum"])
 
             step += 1
             if step % 10 == 0 or step == 1:

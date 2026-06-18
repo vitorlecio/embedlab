@@ -22,6 +22,9 @@ training:
 jepa:
   mask_span_ratio: 0.15
   num_masked_spans: 1
+  ema_momentum: 0.996      # target backbone EMA update rate (higher = slower-moving teacher)
+  variance_weight: 0.05    # VICReg-style anti-collapse term weight (0 disables it)
+  variance_target: 1.0     # target per-dimension std for the variance term
 
 eval:
   baselines:

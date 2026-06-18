@@ -2,18 +2,26 @@
 its *representation* from context, rather than predicting the masked
 tokens themselves (BERT's MLM) or contrasting labeled pairs (NT-Xent).
 
-Architecture: a shared backbone produces both branches.
-  - Context branch: span tokens replaced with [MASK], run through the
-    backbone + a small predictor head -> predicted span representation.
-  - Target branch: original (unmasked) sequence run through the same
-    backbone with gradients stopped -> target span representation.
-The predictor + stop-gradient asymmetry (BYOL/JEPA-style) is what keeps
-this from trivially collapsing to a constant — there is no separate EMA
-teacher network here, which is a simplification worth noting if collapse
-shows up in the downstream STS-B eval.
+Architecture:
+  - Context (online) branch: span tokens replaced with [MASK], run through
+    the trainable backbone + a small predictor head -> predicted span
+    representation.
+  - Target (teacher) branch: original (unmasked) sequence run through a
+    separate target backbone, updated only via an EMA of the online
+    backbone's weights (never by gradient descent) -> target span
+    representation.
+
+v1 of this module shared the online backbone's live weights for both
+branches (stop-gradient only, no EMA teacher) and collapsed: STS-B
+Spearman rho landed below the random-encoder baseline, with measured
+mean pairwise cosine similarity ~0.9997 across unrelated sentences. The
+predictor + stop-gradient asymmetry alone wasn't sufficient -- this EMA
+teacher (the piece real BYOL/I-JEPA/data2vec all use, that v1 omitted)
+is the standard fix.
 """
 from __future__ import annotations
 
+import copy
 import random
 
 import torch
@@ -55,6 +63,25 @@ class JEPAEncoder(nn.Module):
         )
         self.mask_token_id = self.encoder.tokenizer.mask_token_id
 
+        # EMA teacher: starts as an exact copy of the online backbone, then
+        # only ever moves via update_target_backbone() -- never by gradient
+        # descent. Kept in eval mode permanently (no dropout) for stable
+        # targets, regardless of JEPAEncoder.train()/.eval() calls.
+        self.target_backbone = copy.deepcopy(self.encoder.backbone)
+        for param in self.target_backbone.parameters():
+            param.requires_grad_(False)
+        self.target_backbone.eval()
+
+    def train(self, mode: bool = True) -> "JEPAEncoder":
+        super().train(mode)
+        self.target_backbone.eval()
+        return self
+
+    @torch.no_grad()
+    def update_target_backbone(self, momentum: float) -> None:
+        for target_param, online_param in zip(self.target_backbone.parameters(), self.encoder.backbone.parameters()):
+            target_param.mul_(momentum).add_(online_param, alpha=1 - momentum)
+
     def forward(
         self, input_ids: torch.Tensor, attention_mask: torch.Tensor, span_mask: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor]:
@@ -67,7 +94,7 @@ class JEPAEncoder(nn.Module):
         predicted = self.predictor(self._masked_pool(context_hidden, span_mask))
 
         with torch.no_grad():
-            target_hidden = self.encoder.backbone(input_ids=input_ids, attention_mask=attention_mask).last_hidden_state
+            target_hidden = self.target_backbone(input_ids=input_ids, attention_mask=attention_mask).last_hidden_state
             target = self._masked_pool(target_hidden, span_mask)
 
         return predicted, target
