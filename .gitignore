@@ -5,7 +5,8 @@ build/
 dist/
 wheels/
 *.egg-info
-
+*off.ipynb
+*off.md
 # Virtual environments
 .venv
 
@@ -15,4 +16,5 @@ data/domain_corpus/
 checkpoints/
 results/*
 !results/*.json
+!results/*.png
 

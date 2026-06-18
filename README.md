@@ -24,7 +24,9 @@ Most people use embeddings as a black box. This project opens the box: we implem
 
 Contrastive fine-tuning on STS-B (NT-Xent, 2063 positive pairs, 3 epochs) moves Spearman ρ from 0.473 (frozen BERT) to 0.768 — a +0.295 jump — closing most of the gap to SBERT, which is trained on much larger NLI+STS corpora.
 
-UMAP plots of the embedding space (random → frozen BERT → contrastive → JEPA-inspired) will be added here once training is in place.
+![UMAP projection of STS-B positive pairs across encoders](results/umap_test.png)
+
+25 sampled STS-B positive pairs, projected to 2D per encoder (matching colors = same pair). Each panel is an independent UMAP fit — axis scales aren't comparable across panels, so read this qualitatively alongside the Spearman ρ numbers above, not as a standalone metric. A JEPA-inspired panel will be added once Module 2 lands.
 
 ## Progress
 
@@ -37,7 +39,7 @@ UMAP plots of the embedding space (random → frozen BERT → contrastive → JE
 - [x] `notebooks/colab_train_contrastive.ipynb` — Colab notebook for the actual full training run on a free GPU (clones the repo, calls `train_contrastive.train()` directly)
 - [x] Ran the real Module 1 training on Colab (3 epochs, 195 steps, ~75s on a T4), checkpoint brought back locally
 - [x] `evaluation/sts_eval.py` — Spearman ρ on STS-B test split + baselines (random, frozen BERT, SBERT)
-- [ ] `evaluation/visualize.py` — UMAP plots
+- [x] `evaluation/visualize.py` — UMAP plots of paired embeddings (random / frozen BERT / contrastive)
 - [ ] Module 2 (JEPA-inspired self-supervised encoder)
 - [ ] Module 3 (RAG retrieval benchmark)
 
