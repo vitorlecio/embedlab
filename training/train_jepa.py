@@ -1,8 +1,9 @@
-"""Supervised contrastive training loop (Siamese + NT-Xent on STS-B).
+"""Self-supervised JEPA-inspired training loop: mask a span of tokens,
+predict its representation from context.
 
 Usage:
-    uv run python -m training.train_contrastive
-    uv run python -m training.train_contrastive --max-steps 5   # smoke test
+    uv run python -m training.train_jepa
+    uv run python -m training.train_jepa --max-steps 5   # smoke test
 """
 from __future__ import annotations
 
@@ -15,30 +16,28 @@ from torch.utils.data import DataLoader, Dataset
 from transformers import get_linear_schedule_with_warmup
 
 from data.prepare import load_config, prepare_sts_b
-from losses.nt_xent import NTXentLoss
-from models.encoder import TextEncoder
-from models.siamese import SiameseEncoder
+from losses.span_prediction import SpanPredictionLoss
+from models.jepa_encoder import JEPAEncoder, sample_span_mask
 from training.utils import build_optimizer
 
 ROOT = Path(__file__).resolve().parent.parent
 
 
-class PositivePairDataset(Dataset):
-    """Only positive-labeled pairs (label == 1) are used: NT-Xent needs
-    matched anchor/positive pairs and draws negatives implicitly from the
-    rest of the batch, so the explicit negative-labeled rows aren't needed
-    as separate training examples here.
-    """
+class UnlabeledSentenceDataset(Dataset):
+    """Plain sentences from STS-B's train split (sentence1 + sentence2,
+    deduplicated) — scores/labels are deliberately ignored, since this
+    module's whole point is training without labeled pairs, for a fair
+    comparison against Module 1's contrastive approach on the same
+    underlying sentences."""
 
     def __init__(self, df):
-        self.sentences_1 = df.loc[df["label"] == 1, "sentence1"].tolist()
-        self.sentences_2 = df.loc[df["label"] == 1, "sentence2"].tolist()
+        self.sentences = sorted(set(df["sentence1"].tolist()) | set(df["sentence2"].tolist()))
 
     def __len__(self) -> int:
-        return len(self.sentences_1)
+        return len(self.sentences)
 
-    def __getitem__(self, idx: int) -> tuple[str, str]:
-        return self.sentences_1[idx], self.sentences_2[idx]
+    def __getitem__(self, idx: int) -> str:
+        return self.sentences[idx]
 
 
 def train(config: dict, max_steps: int | None = None) -> Path:
@@ -53,17 +52,17 @@ def train(config: dict, max_steps: int | None = None) -> Path:
         positive_threshold=data_cfg["positive_threshold"],
         negative_threshold=data_cfg["negative_threshold"],
     )
-    train_dataset = PositivePairDataset(splits["train"])
-    print(f"[train] {len(train_dataset)} positive training pairs")
+    train_dataset = UnlabeledSentenceDataset(splits["train"])
+    print(f"[train] {len(train_dataset)} unlabeled sentences")
 
     train_cfg = config["training"]
+    jepa_cfg = config["jepa"]
     dataloader = DataLoader(train_dataset, batch_size=train_cfg["batch_size"], shuffle=True)
 
-    encoder = TextEncoder(model_name=config["model"]["backbone"], pooling=config["model"]["pooling"]).to(device)
-    siamese = SiameseEncoder(encoder)
-    loss_fn = NTXentLoss(temperature=train_cfg["temperature"])
+    model = JEPAEncoder(model_name=config["model"]["backbone"], pooling=config["model"]["pooling"]).to(device)
+    loss_fn = SpanPredictionLoss()
 
-    optimizer = build_optimizer(encoder, train_cfg["learning_rate"], train_cfg["weight_decay"])
+    optimizer = build_optimizer(model, train_cfg["learning_rate"], train_cfg["weight_decay"])
     total_steps = len(dataloader) * train_cfg["num_epochs"]
     if max_steps is not None:
         total_steps = min(total_steps, max_steps)
@@ -73,14 +72,23 @@ def train(config: dict, max_steps: int | None = None) -> Path:
         num_training_steps=total_steps,
     )
 
-    encoder.train()
+    model.train()
     step = 0
     start = time.time()
     for epoch in range(train_cfg["num_epochs"]):
-        for sentences_1, sentences_2 in dataloader:
+        for sentences in dataloader:
             optimizer.zero_grad()
-            emb_1, emb_2 = siamese.encode_pairs(list(sentences_1), list(sentences_2), max_length=config["model"]["max_length"], device=device)
-            loss = loss_fn(emb_1, emb_2)
+            batch = model.encoder.tokenizer(
+                list(sentences),
+                padding=True,
+                truncation=True,
+                max_length=config["model"]["max_length"],
+                return_tensors="pt",
+            ).to(device)
+            span_mask = sample_span_mask(batch["attention_mask"], jepa_cfg["mask_span_ratio"], jepa_cfg["num_masked_spans"])
+
+            predicted, target = model(batch["input_ids"], batch["attention_mask"], span_mask)
+            loss = loss_fn(predicted, target)
             loss.backward()
             optimizer.step()
             scheduler.step()
@@ -97,14 +105,14 @@ def train(config: dict, max_steps: int | None = None) -> Path:
 
     checkpoint_dir = ROOT / config["output"]["checkpoint_dir"]
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
-    checkpoint_path = checkpoint_dir / "contrastive_encoder.pt"
-    torch.save(encoder.state_dict(), checkpoint_path)
+    checkpoint_path = checkpoint_dir / "jepa_encoder.pt"
+    torch.save(model.encoder.state_dict(), checkpoint_path)
     print(f"[train] saved checkpoint to {checkpoint_path}")
     return checkpoint_path
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Train the supervised contrastive (Module 1) encoder")
+    parser = argparse.ArgumentParser(description="Train the JEPA-inspired self-supervised (Module 2) encoder")
     parser.add_argument("--config", type=Path, default=ROOT / "configs" / "default.yaml")
     parser.add_argument("--max-steps", type=int, default=None, help="Stop after N steps (for smoke testing)")
     args = parser.parse_args()

@@ -97,14 +97,16 @@ def main() -> dict[str, float]:
     print("[eval] frozen pretrained BERT...")
     results["frozen_bert"] = spearman_for_encoder(TextEncoder(model_name=backbone, pooling=pooling).to(device), df, max_length, device)
 
-    checkpoint_path = ROOT / config["output"]["checkpoint_dir"] / "contrastive_encoder.pt"
-    if checkpoint_path.exists():
-        print(f"[eval] contrastive (Module 1) encoder from {checkpoint_path}...")
-        contrastive_encoder = TextEncoder(model_name=backbone, pooling=pooling)
-        contrastive_encoder.load_state_dict(torch.load(checkpoint_path, map_location=device))
-        results["contrastive"] = spearman_for_encoder(contrastive_encoder.to(device), df, max_length, device)
-    else:
-        print(f"[eval] no checkpoint at {checkpoint_path}, skipping contrastive encoder")
+    checkpoint_dir = ROOT / config["output"]["checkpoint_dir"]
+    for name, filename in [("contrastive", "contrastive_encoder.pt"), ("jepa", "jepa_encoder.pt")]:
+        checkpoint_path = checkpoint_dir / filename
+        if checkpoint_path.exists():
+            print(f"[eval] {name} (Module {'1' if name == 'contrastive' else '2'}) encoder from {checkpoint_path}...")
+            trained_encoder = TextEncoder(model_name=backbone, pooling=pooling)
+            trained_encoder.load_state_dict(torch.load(checkpoint_path, map_location=device))
+            results[name] = spearman_for_encoder(trained_encoder.to(device), df, max_length, device)
+        else:
+            print(f"[eval] no checkpoint at {checkpoint_path}, skipping {name} encoder")
 
     print("[eval] SBERT baseline (all-MiniLM-L6-v2)...")
     results["sbert"] = spearman_for_sbert("all-MiniLM-L6-v2", df)

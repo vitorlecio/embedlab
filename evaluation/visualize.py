@@ -129,14 +129,16 @@ def main() -> None:
         "random": build_random_encoder(backbone, pooling, seed=seed),
         "frozen_bert": TextEncoder(model_name=backbone, pooling=pooling),
     }
-    checkpoint_path = ROOT / config["output"]["checkpoint_dir"] / "contrastive_encoder.pt"
-    if checkpoint_path.exists():
-        print(f"[visualize] loading contrastive checkpoint from {checkpoint_path}")
-        contrastive_encoder = TextEncoder(model_name=backbone, pooling=pooling)
-        contrastive_encoder.load_state_dict(torch.load(checkpoint_path, map_location=device))
-        encoders["contrastive"] = contrastive_encoder
-    else:
-        print(f"[visualize] no checkpoint at {checkpoint_path}, skipping contrastive encoder")
+    checkpoint_dir = ROOT / config["output"]["checkpoint_dir"]
+    for name, filename in [("contrastive", "contrastive_encoder.pt"), ("jepa", "jepa_encoder.pt")]:
+        checkpoint_path = checkpoint_dir / filename
+        if checkpoint_path.exists():
+            print(f"[visualize] loading {name} checkpoint from {checkpoint_path}")
+            trained_encoder = TextEncoder(model_name=backbone, pooling=pooling)
+            trained_encoder.load_state_dict(torch.load(checkpoint_path, map_location=device))
+            encoders[name] = trained_encoder
+        else:
+            print(f"[visualize] no checkpoint at {checkpoint_path}, skipping {name} encoder")
 
     encoders["sbert"] = SBERTAdapter("all-MiniLM-L6-v2")
 
