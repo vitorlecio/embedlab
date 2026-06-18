@@ -105,7 +105,7 @@ def main() -> None:
     max_length = config["model"]["max_length"]
 
     encoders = {
-        "random": build_random_encoder(backbone, pooling),
+        "random": build_random_encoder(backbone, pooling, seed=seed),
         "frozen_bert": TextEncoder(model_name=backbone, pooling=pooling),
     }
     checkpoint_path = ROOT / config["output"]["checkpoint_dir"] / "contrastive_encoder.pt"

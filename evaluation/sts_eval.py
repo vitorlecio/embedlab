@@ -39,9 +39,16 @@ def spearman_for_encoder(encoder: TextEncoder, df, max_length: int, device) -> f
     return float(rho)
 
 
-def build_random_encoder(model_name: str, pooling: str) -> TextEncoder:
+def build_random_encoder(model_name: str, pooling: str, seed: int | None = None) -> TextEncoder:
     """Same architecture as the pretrained backbone, but randomly initialized
-    (no pretraining, no fine-tuning) — the bottom-of-the-scale baseline."""
+    (no pretraining, no fine-tuning) — the bottom-of-the-scale baseline.
+
+    Seeds torch right before initializing the random weights so this baseline
+    is reproducible run-to-run (unlike the pretrained/checkpoint encoders,
+    its weights are otherwise drawn fresh every call).
+    """
+    if seed is not None:
+        torch.manual_seed(seed)
     encoder = TextEncoder(model_name=model_name, pooling=pooling)
     encoder.backbone = AutoModel.from_config(encoder.backbone.config)
     return encoder
@@ -85,7 +92,7 @@ def main() -> dict[str, float]:
     results: dict[str, float] = {}
 
     print("[eval] random encoder...")
-    results["random"] = spearman_for_encoder(build_random_encoder(backbone, pooling).to(device), df, max_length, device)
+    results["random"] = spearman_for_encoder(build_random_encoder(backbone, pooling, seed=config["training"]["seed"]).to(device), df, max_length, device)
 
     print("[eval] frozen pretrained BERT...")
     results["frozen_bert"] = spearman_for_encoder(TextEncoder(model_name=backbone, pooling=pooling).to(device), df, max_length, device)

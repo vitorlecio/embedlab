@@ -16,7 +16,7 @@ Most people use embeddings as a black box. This project opens the box: we implem
 
 | Encoder | STS-B Spearman ρ (test) | P@k (RAG retrieval) | Latency |
 |---|---|---|---|
-| Random encoder | 0.394 | TBD | TBD |
+| Random encoder | 0.418 | TBD | TBD |
 | Frozen BERT (no fine-tuning) | 0.473 | TBD | TBD |
 | **Contrastive (Module 1)** | **0.768** | TBD | TBD |
 | JEPA-inspired (Module 2) | TBD | TBD | TBD |
