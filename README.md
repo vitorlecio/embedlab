@@ -4,7 +4,7 @@ A from-scratch PyTorch implementation of contrastive text representation learnin
 
 Most people use embeddings as a black box. This project opens the box: we implement contrastive text representation learning from scratch, extend it with a JEPA-inspired self-supervised objective, and measure whether the choice of training signal actually matters for downstream RAG retrieval quality. Spoiler: it does, and the why is interesting.
 
-> **Status:** in progress. Module 1 (contrastive) code is complete and smoke-tested on CPU; the real training run happens on a free Colab GPU (local machine has no CUDA GPU), then evaluation comes next. See the [progress](#progress) section below.
+> **Status:** in progress. Module 1 (contrastive) is trained and evaluated on STS-B — contrastive fine-tuning closes most of the gap to SBERT. Module 2 (JEPA-inspired) and Module 3 (RAG benchmark) are next. See the [progress](#progress) section below.
 
 ## The three modules
 
@@ -14,13 +14,15 @@ Most people use embeddings as a black box. This project opens the box: we implem
 
 ## Results
 
-| Encoder | STS-B Spearman ρ | P@k (RAG retrieval) | Latency |
+| Encoder | STS-B Spearman ρ (test) | P@k (RAG retrieval) | Latency |
 |---|---|---|---|
-| Random encoder | TBD | TBD | TBD |
-| Frozen BERT (no fine-tuning) | TBD | TBD | TBD |
-| Contrastive (Module 1) | TBD | TBD | TBD |
+| Random encoder | 0.394 | TBD | TBD |
+| Frozen BERT (no fine-tuning) | 0.473 | TBD | TBD |
+| **Contrastive (Module 1)** | **0.768** | TBD | TBD |
 | JEPA-inspired (Module 2) | TBD | TBD | TBD |
-| SBERT (`all-MiniLM-L6-v2`) | TBD | TBD | TBD |
+| SBERT (`all-MiniLM-L6-v2`) | 0.820 | TBD | TBD |
+
+Contrastive fine-tuning on STS-B (NT-Xent, 2063 positive pairs, 3 epochs) moves Spearman ρ from 0.473 (frozen BERT) to 0.768 — a +0.295 jump — closing most of the gap to SBERT, which is trained on much larger NLI+STS corpora.
 
 UMAP plots of the embedding space (random → frozen BERT → contrastive → JEPA-inspired) will be added here once training is in place.
 
@@ -32,9 +34,9 @@ UMAP plots of the embedding space (random → frozen BERT → contrastive → JE
 - [x] `losses/nt_xent.py` — NT-Xent contrastive loss, sanity-checked
 - [x] `models/siamese.py` — siamese wrapper, verified shapes + gradient flow
 - [x] `training/train_contrastive.py` — supervised contrastive training loop, smoke-tested on CPU (~50s/step — too slow locally for a full run)
-- [x] `notebooks/colab_train_contrastive.ipynb` — self-contained Colab notebook for the actual full training run on a free GPU
-- [ ] Run the real Module 1 training on Colab, bring the checkpoint back
-- [ ] `evaluation/sts_eval.py` — Spearman ρ on STS-B + baselines (random, frozen BERT, SBERT)
+- [x] `notebooks/colab_train_contrastive.ipynb` — Colab notebook for the actual full training run on a free GPU (clones the repo, calls `train_contrastive.train()` directly)
+- [x] Ran the real Module 1 training on Colab (3 epochs, 195 steps, ~75s on a T4), checkpoint brought back locally
+- [x] `evaluation/sts_eval.py` — Spearman ρ on STS-B test split + baselines (random, frozen BERT, SBERT)
 - [ ] `evaluation/visualize.py` — UMAP plots
 - [ ] Module 2 (JEPA-inspired self-supervised encoder)
 - [ ] Module 3 (RAG retrieval benchmark)
