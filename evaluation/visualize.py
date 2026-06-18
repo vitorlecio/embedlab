@@ -29,6 +29,27 @@ import matplotlib.pyplot as plt
 ROOT = Path(__file__).resolve().parent.parent
 
 
+class SBERTAdapter:
+    """Wraps a sentence-transformers model behind the same .eval()/.to()/.encode()
+    interface as TextEncoder, so it can drop into pair_embeddings()/encode_all()
+    unchanged despite being a different library and embedding dimensionality."""
+
+    def __init__(self, model_name: str):
+        from sentence_transformers import SentenceTransformer
+
+        self.model = SentenceTransformer(model_name)
+
+    def eval(self) -> "SBERTAdapter":
+        return self
+
+    def to(self, device) -> "SBERTAdapter":
+        self.model = self.model.to(device)
+        return self
+
+    def encode(self, sentences: list[str], max_length: int | None = None, device="cpu") -> torch.Tensor:
+        return self.model.encode(sentences, convert_to_tensor=True, device=str(device))
+
+
 def sample_pairs(df, n_pairs: int, seed: int):
     positive = df[df["label"] == 1].reset_index(drop=True)
     n_pairs = min(n_pairs, len(positive))
@@ -116,6 +137,8 @@ def main() -> None:
         encoders["contrastive"] = contrastive_encoder
     else:
         print(f"[visualize] no checkpoint at {checkpoint_path}, skipping contrastive encoder")
+
+    encoders["sbert"] = SBERTAdapter("all-MiniLM-L6-v2")
 
     projections = {}
     for name, encoder in encoders.items():
