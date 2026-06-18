@@ -1,0 +1,34 @@
+model:
+  backbone: bert-base-uncased
+  pooling: mean        # mean | cls
+  max_length: 128
+
+data:
+  sts_b_dataset: mteb/stsbenchmark-sts   # HF datasets id (sentence1, sentence2, score 0-5)
+  domain_corpus_dir: data/domain_corpus  # unlabeled text for JEPA pretraining; populate later from RAG agent docs
+  cache_dir: data/cache
+  positive_threshold: 3.5  # score >= this -> positive pair (was 4.0; too strict, dropped near-paraphrases)
+  negative_threshold: 2.0  # score <= this -> negative pair
+
+training:
+  batch_size: 32
+  num_epochs: 3
+  learning_rate: 2.0e-5
+  warmup_ratio: 0.1
+  weight_decay: 0.01
+  temperature: 0.05     # NT-Xent temperature
+  seed: 42
+
+jepa:
+  mask_span_ratio: 0.15
+  num_masked_spans: 1
+
+eval:
+  baselines:
+    - random
+    - frozen_bert
+    - sbert:all-MiniLM-L6-v2
+
+output:
+  checkpoint_dir: checkpoints
+  results_dir: results
