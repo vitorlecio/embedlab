@@ -25,6 +25,8 @@ jepa:
   ema_momentum: 0.996      # target backbone EMA update rate (higher = slower-moving teacher)
   variance_weight: 0.05    # VICReg-style anti-collapse term weight (0 disables it)
   variance_target: 1.0     # target per-dimension std for the variance term
+  covariance_weight: 0.04  # VICReg-style decorrelation term weight (0 disables it) -- targets
+                           # the "single ray" collapse the variance term alone didn't catch (v2)
 
 eval:
   baselines:
